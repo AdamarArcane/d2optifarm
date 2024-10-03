@@ -2,50 +2,97 @@ package main
 
 import (
 	"database/sql"
+	"embed"
+	"io"
 	"log"
 	"net/http"
 	"os"
-	"sync/atomic"
+	"time"
 
+	"github.com/go-chi/chi"
+	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 
-	_ "github.com/tursodatabase/go-libsql"
+	"github.com/adamararcane/d2optifarm/internal/database"
+
+	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 
-func main() {
-	mux := http.NewServeMux()
-	server := &http.Server{
-		Handler: mux,
-		Addr:    ":8080",
-	}
-	godotenv.Load()
-	dbURL := os.Getenv("DATABASE_URL")
-	db, err := sql.Open("libsql", dbURL)
-	if err != nil {
-		log.Printf("Error opening db: %s", err)
-		return
-	}
-	defer db.Close()
-
-	dbQueries := database.New(db)
-
-	cfg := apiConfig{
-		fileserverHits: atomic.Int32{},
-		db:             dbQueries,
-	}
-
-	fileServerHandler := http.FileServer(http.Dir("."))
-	strippedHandler := http.StripPrefix("/app", fileServerHandler)
-
-	mux.Handle("/app/", cfg.siteHitsMiddleware(strippedHandler))
-	mux.Handle("/app/assets/logo.png", strippedHandler)
-
-	server.ListenAndServe()
+type apiConfig struct {
+	DB *database.Queries
 }
 
-// Data Structures
+//go:embed static/*
+var staticFiles embed.FS
 
-type apiConfig struct {
-	fileserverHits atomic.Int32
-	db             *database.Queries
+func main() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Printf("warning: assuming default configuration. .env unreadable: %v", err)
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		log.Fatal("PORT environment variable is not set")
+	}
+
+	apiCfg := apiConfig{}
+
+	// https://github.com/libsql/libsql-client-go/#open-a-connection-to-sqld
+	// libsql://[your-database].turso.io?authToken=[your-auth-token]
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Println("DATABASE_URL environment variable is not set")
+		log.Println("Running without CRUD endpoints")
+	} else {
+		db, err := sql.Open("libsql", dbURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dbQueries := database.New(db)
+		apiCfg.DB = dbQueries
+		log.Println("Connected to database!")
+	}
+
+	router := chi.NewRouter()
+
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"*"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
+
+	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		f, err := staticFiles.Open("static/index.html")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer f.Close()
+		if _, err := io.Copy(w, f); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
+	v1Router := chi.NewRouter()
+
+	if apiCfg.DB != nil {
+		v1Router.Post("/users", apiCfg.handlerUsersCreate)
+		v1Router.Get("/users", apiCfg.middlewareAuth(apiCfg.handlerUsersGet))
+	}
+
+	v1Router.Get("/healthz", handlerReadiness)
+
+	router.Mount("/v1", v1Router)
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           router,
+		ReadHeaderTimeout: 30 * time.Second,
+	}
+
+	log.Printf("Serving on port: %s\n", port)
+	log.Fatal(srv.ListenAndServe())
 }
