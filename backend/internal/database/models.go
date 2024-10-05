@@ -4,10 +4,16 @@
 
 package database
 
+import (
+	"time"
+)
+
 type User struct {
-	ID        string
-	CreatedAt string
-	UpdatedAt string
-	Name      string
-	ApiKey    string
+	UserID         string
+	MembershipType int64
+	AccessToken    string
+	RefreshToken   string
+	TokenExpiry    time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }

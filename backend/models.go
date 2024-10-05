@@ -1,34 +1,30 @@
 package main
 
-import (
-	"time"
-
-	"github.com/adamararcane/d2optifarm/backend/internal/database"
-)
-
-type User struct {
-	ID        string    `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Name      string    `json:"name"`
-	ApiKey    string    `json:"api_key"`
+type ProfileResponse struct {
+	Response struct {
+		ProfileInventory struct {
+			Data struct {
+				Items []struct {
+					ItemHash       uint32 `json:"itemHash"`
+					ItemInstanceID string `json:"itemInstanceId"`
+					Quantity       int    `json:"quantity"`
+				} `json:"items"`
+			} `json:"data"`
+		} `json:"profileInventory"`
+		// Include other components as needed
+	} `json:"Response"`
+	ErrorCode   int               `json:"ErrorCode"`
+	ErrorStatus string            `json:"ErrorStatus"`
+	Message     string            `json:"Message"`
+	MessageData map[string]string `json:"MessageData"`
 }
 
-func databaseUserToUser(user database.User) (User, error) {
-	createdAt, err := time.Parse(time.RFC3339, user.CreatedAt)
-	if err != nil {
-		return User{}, err
-	}
-
-	updatedAt, err := time.Parse(time.RFC3339, user.UpdatedAt)
-	if err != nil {
-		return User{}, err
-	}
-	return User{
-		ID:        user.ID,
-		CreatedAt: createdAt,
-		UpdatedAt: updatedAt,
-		Name:      user.Name,
-		ApiKey:    user.ApiKey,
-	}, nil
+type ItemDefinition struct {
+	DisplayProperties struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Icon        string `json:"icon"`
+	} `json:"displayProperties"`
+	ItemTypeDisplayName string `json:"itemTypeDisplayName"`
+	// Include other fields as needed
 }

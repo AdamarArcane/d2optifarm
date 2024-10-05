@@ -1,15 +1,18 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Login from './components/Login';
+import Inventory from './components/Inventory';
 
-import './App.css'
-import { Button } from './components/ui/button'
-
-function App() {
-
-
+const App: React.FC = () => {
   return (
-    <>
-      <Button>D2 OAuth2</Button>
-    </>
-  )
-}
+    <Router>
+      <Routes>
+        <Route path="/" element={<Login />} />
+        <Route path="/dashboard" element={<Inventory />} />
+        {/* Add more routes if needed */}
+      </Routes>
+    </Router>
+  );
+};
 
-export default App
+export default App;

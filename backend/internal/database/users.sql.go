@@ -7,11 +7,14 @@ package database
 
 import (
 	"context"
+	"time"
 )
 
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (id, created_at, updated_at, name, api_key)
+INSERT INTO users (user_id, membership_type, access_token, refresh_token, token_expiry, created_at, updated_at)
 VALUES (
+    ?,
+    ?,
     ?,
     ?,
     ?,
@@ -21,38 +24,73 @@ VALUES (
 `
 
 type CreateUserParams struct {
-	ID        string
-	CreatedAt string
-	UpdatedAt string
-	Name      string
-	ApiKey    string
+	UserID         string
+	MembershipType int64
+	AccessToken    string
+	RefreshToken   string
+	TokenExpiry    time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	_, err := q.db.ExecContext(ctx, createUser,
-		arg.ID,
+		arg.UserID,
+		arg.MembershipType,
+		arg.AccessToken,
+		arg.RefreshToken,
+		arg.TokenExpiry,
 		arg.CreatedAt,
 		arg.UpdatedAt,
-		arg.Name,
-		arg.ApiKey,
 	)
 	return err
 }
 
 const getUser = `-- name: GetUser :one
 
-SELECT id, created_at, updated_at, name, api_key FROM users WHERE api_key = ?
+SELECT user_id, membership_type, access_token, refresh_token, token_expiry, created_at, updated_at FROM users WHERE user_id = ?
 `
 
-func (q *Queries) GetUser(ctx context.Context, apiKey string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUser, apiKey)
+func (q *Queries) GetUser(ctx context.Context, userID string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUser, userID)
 	var i User
 	err := row.Scan(
-		&i.ID,
+		&i.UserID,
+		&i.MembershipType,
+		&i.AccessToken,
+		&i.RefreshToken,
+		&i.TokenExpiry,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Name,
-		&i.ApiKey,
 	)
 	return i, err
+}
+
+const updateToken = `-- name: UpdateToken :exec
+
+UPDATE users
+SET access_token = ?,
+    updated_at = ?,
+    refresh_token = ?,
+    token_expiry = ?
+WHERE user_id = ?
+`
+
+type UpdateTokenParams struct {
+	AccessToken  string
+	UpdatedAt    time.Time
+	RefreshToken string
+	TokenExpiry  time.Time
+	UserID       string
+}
+
+func (q *Queries) UpdateToken(ctx context.Context, arg UpdateTokenParams) error {
+	_, err := q.db.ExecContext(ctx, updateToken,
+		arg.AccessToken,
+		arg.UpdatedAt,
+		arg.RefreshToken,
+		arg.TokenExpiry,
+		arg.UserID,
+	)
+	return err
 }
