@@ -80,3 +80,13 @@ func Decrypt(cryptoText string) (string, error) {
 	stream.XORKeyStream(ciphertext, ciphertext)
 	return string(ciphertext), nil
 }
+
+type APIKeyTransport struct {
+	Base   http.RoundTripper
+	APIKey string
+}
+
+func (t *APIKeyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("X-API-Key", t.APIKey)
+	return t.Base.RoundTrip(req)
+}
